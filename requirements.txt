@@ -1,0 +1,2 @@
+# Main requirements file - points to base for Render compatibility
+-r requirements/base.txt

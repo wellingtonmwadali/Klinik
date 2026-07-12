@@ -1,0 +1,46 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    "*/migrations/*",
+    "venv",
+    "env",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | env
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = ["migrations", "venv", "env", ".venv"]

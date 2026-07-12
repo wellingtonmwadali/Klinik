@@ -1,0 +1,4 @@
+-r base.txt
+
+# Production-specific
+sentry-sdk>=1.39.1
