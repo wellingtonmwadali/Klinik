@@ -15,20 +15,6 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_klinik
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,9 +30,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements/dev.txt
       
+      - name: Check migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          SECRET_KEY: test-secret-key-for-ci
+          DEBUG: False
+        run: |
+          python manage.py makemigrations --check --dry-run
+      
       - name: Run pytest
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_klinik
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
           SECRET_KEY: test-secret-key-for-ci
           DEBUG: False
         run: |
@@ -104,3 +98,26 @@ jobs:
       - name: Run black
         run: |
           black --check .
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+      
+      - name: Run bandit security scan
+        run: |
+          bandit -r apps config

@@ -9,6 +9,12 @@ def health_check(request):
     """Health check endpoint for Render deployment verification."""
     return JsonResponse({'status': 'healthy', 'service': 'klinik-api'})
 
+def home(request):
+    return JsonResponse({
+        "message": "Clinic Booking API",
+        "status": "running"
+    })
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -16,6 +22,7 @@ urlpatterns = [
     path('api/appointments/', include('apps.appointments.urls')),
     path('api/doctors/', include('apps.doctors.urls')),
     path('api/patients/', include('apps.patients.urls')),
+    path('', home, name='home'),
 ]
 
 # Add debug toolbar URLs in development

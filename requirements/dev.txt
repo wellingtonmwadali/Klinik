@@ -10,6 +10,7 @@ factory-boy>=3.3.0
 ruff>=0.1.9
 black>=23.12.1
 isort>=5.13.2
+bandit>=1.7.5
 
 # Development tools
 django-debug-toolbar>=4.2.0

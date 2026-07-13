@@ -46,3 +46,6 @@ Thumbs.db
 
 # Render
 .render/
+
+# Node modules
+node_modules/
