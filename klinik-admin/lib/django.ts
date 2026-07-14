@@ -1,10 +1,9 @@
-import { cookies } from "next/headers";
+import type { IncomingMessage, ServerResponse } from "http";
 
-// Server-only: this module reads/writes the incoming request's cookie jar via
-// next/headers, which throws if imported from a Client Component. Never call
-// these from "use client" code — the browser should never talk to Django
-// directly; it only ever talks to this Next.js server (Server Components /
-// Server Actions), which forwards to Django on its behalf.
+// Server-only: reads/writes cookies via the raw req/res passed in from
+// getServerSideProps or an API route handler. The browser never talks to
+// Django directly; it only ever talks to this Next.js server, which forwards
+// to Django on its behalf.
 
 const DJANGO_API_URL = process.env.DJANGO_API_URL ?? "http://localhost:8000";
 
@@ -22,18 +21,29 @@ export class DjangoApiError extends Error {
   }
 }
 
+// Satisfied by both NextApiRequest and GetServerSidePropsContext["req"].
+type ReqLike = Pick<IncomingMessage, "headers">;
+// Satisfied by both NextApiResponse and GetServerSidePropsContext["res"].
+type ResLike = Pick<ServerResponse, "getHeader" | "setHeader">;
+
+function parseCookieHeader(cookieHeader: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of cookieHeader.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    out[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+  }
+  return out;
+}
+
 /**
  * Calls the Django API server-to-server, forwarding the current request's
  * cookies (sessionid, csrftoken) so the call rides on the same Django
  * session the browser has. Attaches X-CSRFToken automatically for mutating
  * methods, per Django's documented CSRF-for-AJAX pattern.
  */
-export async function djangoFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const store = await cookies();
-  const cookieHeader = store
-    .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
+export async function djangoFetch(req: ReqLike, path: string, init: RequestInit = {}): Promise<Response> {
+  const cookieHeader = req.headers.cookie ?? "";
 
   const headers = new Headers(init.headers);
   headers.set("Cookie", cookieHeader);
@@ -43,7 +53,7 @@ export async function djangoFetch(path: string, init: RequestInit = {}): Promise
 
   const method = (init.method ?? "GET").toUpperCase();
   if (!SAFE_METHODS.has(method)) {
-    const csrftoken = store.get("csrftoken")?.value;
+    const csrftoken = parseCookieHeader(cookieHeader).csrftoken;
     if (csrftoken) {
       headers.set("X-CSRFToken", csrftoken);
     }
@@ -53,8 +63,8 @@ export async function djangoFetch(path: string, init: RequestInit = {}): Promise
 }
 
 /** djangoFetch, but parses the JSON body and throws DjangoApiError on non-2xx. */
-export async function djangoJson<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await djangoFetch(path, init);
+export async function djangoJson<T = unknown>(req: ReqLike, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await djangoFetch(req, path, init);
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     throw new DjangoApiError(response.status, body);
@@ -62,68 +72,20 @@ export async function djangoJson<T = unknown>(path: string, init: RequestInit = 
   return body as T;
 }
 
-/**
- * Relays every Set-Cookie header from a Django response onto the current
- * Next.js response's cookie jar. Only callable from a Server Action or Route
- * Handler (Next.js enforces this) — use right after login/logout calls.
- */
-export async function relayCookies(response: Response): Promise<void> {
-  const store = await cookies();
-  const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
-  for (const raw of setCookieHeaders) {
-    const parsed = parseSetCookie(raw);
-    if (parsed) {
-      store.set(parsed.name, parsed.value, parsed.options);
-    }
-  }
+/** Appends (does not clobber) a raw Set-Cookie string onto the response. */
+export function appendSetCookie(res: ResLike, rawCookie: string): void {
+  const existing = res.getHeader("Set-Cookie");
+  const existingArr = existing ? (Array.isArray(existing) ? existing.map(String) : [String(existing)]) : [];
+  res.setHeader("Set-Cookie", [...existingArr, rawCookie]);
 }
 
-type ParsedCookie = {
-  name: string;
-  value: string;
-  options: {
-    path?: string;
-    httpOnly?: boolean;
-    secure?: boolean;
-    sameSite?: "lax" | "strict" | "none";
-    maxAge?: number;
-    expires?: Date;
-  };
-};
-
-function parseSetCookie(raw: string): ParsedCookie | null {
-  const segments = raw.split(";").map((segment) => segment.trim());
-  const [nameValue, ...attributeSegments] = segments;
-  const eqIndex = nameValue.indexOf("=");
-  if (eqIndex === -1) return null;
-
-  const name = nameValue.slice(0, eqIndex);
-  const value = nameValue.slice(eqIndex + 1);
-  const options: ParsedCookie["options"] = {};
-
-  for (const attribute of attributeSegments) {
-    const [rawKey, rawValue] = attribute.split("=");
-    switch (rawKey.trim().toLowerCase()) {
-      case "path":
-        options.path = rawValue;
-        break;
-      case "max-age":
-        options.maxAge = Number(rawValue);
-        break;
-      case "expires":
-        options.expires = new Date(rawValue);
-        break;
-      case "samesite":
-        options.sameSite = rawValue?.toLowerCase() as "lax" | "strict" | "none" | undefined;
-        break;
-      case "httponly":
-        options.httpOnly = true;
-        break;
-      case "secure":
-        options.secure = true;
-        break;
-    }
+/**
+ * Relays every Set-Cookie header from a Django response onto the current
+ * Next.js response, unparsed — use right after login/logout calls.
+ */
+export function relayCookies(res: ResLike, djangoResponse: Response): void {
+  const setCookieHeaders = djangoResponse.headers.getSetCookie?.() ?? [];
+  for (const raw of setCookieHeaders) {
+    appendSetCookie(res, raw);
   }
-
-  return { name, value, options };
 }

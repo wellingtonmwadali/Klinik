@@ -9,7 +9,8 @@ from .serializers import LoginSerializer
 
 
 def _user_payload(user):
-    return {
+    """Build user payload including doctor profile if applicable."""
+    payload = {
         "id": user.id,
         "username": user.username,
         "email": user.email,
@@ -17,7 +18,16 @@ def _user_payload(user):
         "last_name": user.last_name,
         "role": user.role.name if user.role else None,
         "is_staff": user.is_staff,
+        "doctor_profile": None,
     }
+    
+    # Include doctor profile if user is a doctor
+    if hasattr(user, 'doctor_profile') and user.doctor_profile:
+        payload["doctor_profile"] = {
+            "id": user.doctor_profile.id,
+        }
+    
+    return payload
 
 
 @api_view(["GET"])

@@ -3,12 +3,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from core.models import Role
 from .models import Doctor, DoctorWorkSchedule
 from .serializers import (
     DoctorSerializer,
@@ -40,6 +41,8 @@ class DoctorViewSet(viewsets.ModelViewSet):
             permission_classes = [AllowAny]
         elif self.action == 'work_schedule' and self.request.method == 'GET':
             permission_classes = [AllowAny]
+        elif self.action == 'work_schedule' and self.request.method == 'PUT':
+            permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminUser]
         return [permission() for permission in permission_classes]
@@ -75,6 +78,16 @@ class DoctorViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         # PUT
+        role_name = request.user.role.name if getattr(request.user, 'role', None) else None
+        if not request.user.is_staff and role_name != Role.ADMIN:
+            if not hasattr(request.user, 'doctor_profile') or request.user.doctor_profile.id != doctor.id:
+                return Response(
+                    {
+                        'detail': 'You do not have permission to edit this doctor schedule.',
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = WeeklyScheduleWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

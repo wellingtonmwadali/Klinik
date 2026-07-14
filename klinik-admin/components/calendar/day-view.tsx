@@ -1,4 +1,8 @@
+import { useState } from "react";
+import { useRouter } from "next/router";
+
 import { CalendarDoctor, doctorColor, shortTime } from "@/lib/calendar";
+import { BookAppointmentModal } from "@/components/calendar/book-appointment-modal";
 
 export type WorkHours = {
   start: string;
@@ -53,6 +57,9 @@ function hourTop(hour: number): string {
 }
 
 export function DayView({ days }: { days: DoctorDay[] }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<{ doctor: CalendarDoctor; slot: Slot } | null>(null);
+
   return (
     <>
       <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
@@ -131,15 +138,17 @@ export function DayView({ days }: { days: DoctorDay[] }) {
                         )}
                       {/* Available slots */}
                       {availability.available_slots.map((slot) => (
-                        <div
+                        <button
                           key={slot.start_datetime}
-                          className={`absolute inset-x-1 overflow-hidden rounded-sm border px-1.5 ${color.chip}`}
+                          type="button"
+                          onClick={() => setSelected({ doctor, slot })}
+                          className={`absolute inset-x-1 overflow-hidden rounded-sm border px-1.5 text-left transition-shadow hover:shadow-md hover:ring-2 hover:ring-offset-1 ${color.chip}`}
                           style={band(slot.start_time, slot.end_time)}
                         >
                           <span className="text-[10px] font-medium leading-tight">
                             {shortTime(slot.start_time)}–{shortTime(slot.end_time)}
                           </span>
-                        </div>
+                        </button>
                       ))}
                     </>
                   )}
@@ -159,8 +168,22 @@ export function DayView({ days }: { days: DoctorDay[] }) {
           <span className="inline-block h-3 w-3 rounded-sm bg-zinc-200 dark:bg-zinc-800" />
           Break
         </span>
-        <span>Colored blocks are open, bookable slots.</span>
+        <span>Colored blocks are open, bookable slots. Click one to book.</span>
       </div>
+
+      {selected && (
+        <BookAppointmentModal
+          doctor={selected.doctor}
+          slot={selected.slot}
+          onClose={() => setSelected(null)}
+          onBooked={() => {
+            setSelected(null);
+            // Pages Router analog of App Router's router.refresh(): re-runs
+            // getServerSideProps for the current URL without a full reload.
+            router.replace(router.asPath, undefined, { scroll: false });
+          }}
+        />
+      )}
     </>
   );
 }

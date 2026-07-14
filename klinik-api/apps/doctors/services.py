@@ -137,21 +137,25 @@ class AvailabilityService:
     
     @staticmethod
     def _get_work_schedule(
-        doctor: Doctor, 
-        requested_date: date, 
-        weekday: int
+        doctor: Doctor,
+        requested_date: date,
+        weekday: int,
     ) -> Optional[DoctorWorkSchedule]:
         """Get the applicable work schedule for a doctor on a specific date."""
         try:
-            schedules = DoctorWorkSchedule.objects.filter(
-                doctor=doctor,
-                weekday=weekday,
-                effective_from__lte=requested_date
-            ).filter(
-                # effective_until is null (indefinite) or in the future
-                models.Q(effective_until__isnull=True) | models.Q(effective_until__gte=requested_date)
-            ).order_by('-effective_from')
-            
+            schedules = (
+                DoctorWorkSchedule.objects.filter(
+                    doctor=doctor,
+                    weekday=weekday,
+                    effective_from__lte=requested_date,
+                )
+                .filter(
+                    models.Q(effective_until__isnull=True)
+                    | models.Q(effective_until__gte=requested_date)
+                )
+                .order_by('-effective_from', '-id')
+            )
+
             return schedules.first()
         except Exception as e:
             raise ValidationError(f"Error fetching work schedule: {str(e)}")

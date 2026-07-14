@@ -24,9 +24,11 @@ function lastName(fullName: string): string {
 export function MonthView({
   date,
   doctorSchedules,
+  dayLinkParams = "",
 }: {
   date: string;
   doctorSchedules: DoctorSchedule[];
+  dayLinkParams?: string;
 }) {
   const grid = monthGrid(date);
   const todayStr = today();
@@ -62,7 +64,7 @@ export function MonthView({
                       }`}
                     >
                       <Link
-                        href={`/doctors/calendar?view=day&date=${day}`}
+                        href={`/patients/calendar?view=day&date=${day}${dayLinkParams}`}
                         className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
                           isToday
                             ? "bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950"
@@ -77,7 +79,7 @@ export function MonthView({
                         {available.map((entry) => (
                           <Link
                             key={entry.doctor.id}
-                            href={`/doctors/calendar?view=day&date=${day}`}
+                            href={`/patients/calendar?view=day&date=${day}${dayLinkParams}`}
                             className={`truncate rounded-sm border px-1 py-px text-[10px] font-medium ${doctorColor(entry.index).chip} ${
                               inMonth ? "" : "opacity-50"
                             }`}

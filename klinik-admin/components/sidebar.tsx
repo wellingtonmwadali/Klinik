@@ -1,15 +1,14 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/router";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/doctors", label: "Doctors" },
+  { href: "/patients", label: "Patients" },
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const { pathname } = useRouter();
 
   return (
     <nav className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-6 dark:border-zinc-800 dark:bg-zinc-950">

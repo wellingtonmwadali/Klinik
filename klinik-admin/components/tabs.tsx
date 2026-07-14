@@ -1,7 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/router";
 
 export type TabItem = {
   href: string;
@@ -11,7 +9,7 @@ export type TabItem = {
 };
 
 export function Tabs({ items }: { items: TabItem[] }) {
-  const pathname = usePathname();
+  const { pathname } = useRouter();
 
   return (
     <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">

@@ -13,9 +13,11 @@ import type { DoctorSchedule } from "@/components/calendar/month-view";
 export function WeekView({
   date,
   doctorSchedules,
+  dayLinkParams = "",
 }: {
   date: string;
   doctorSchedules: DoctorSchedule[];
+  dayLinkParams?: string;
 }) {
   const days = weekDates(date);
   const todayStr = today();
@@ -36,7 +38,7 @@ export function WeekView({
                 className="border-r border-zinc-200 last:border-r-0 dark:border-zinc-800"
               >
                 <Link
-                  href={`/doctors/calendar?view=day&date=${day}`}
+                  href={`/patients/calendar?view=day&date=${day}${dayLinkParams}`}
                   className={`flex items-baseline gap-1.5 border-b border-zinc-200 px-3 py-2 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 ${
                     isToday ? "bg-zinc-100 dark:bg-zinc-900" : ""
                   }`}

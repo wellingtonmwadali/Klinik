@@ -1,16 +1,40 @@
-"use client";
-
-import { useActionState } from "react";
-
-import { login } from "@/app/actions/auth";
+import { useState } from "react";
+import { useRouter } from "next/router";
 
 export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(login, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(undefined);
+
+    const formData = new FormData(e.currentTarget);
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: formData.get("username"),
+        password: formData.get("password"),
+      }),
+    });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(body?.error ?? "Login failed. Please try again.");
+      setPending(false);
+      return;
+    }
+
+    router.push("/dashboard");
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
       <form
-        action={formAction}
+        onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-5 rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
         <div>
@@ -55,8 +79,8 @@ export default function LoginPage() {
           />
         </div>
 
-        {state?.error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
 
         <button

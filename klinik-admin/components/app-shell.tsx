@@ -1,10 +1,10 @@
+import type { ReactNode } from "react";
+
 import { Sidebar } from "@/components/sidebar";
-import { logout } from "@/app/actions/auth";
-import { requireMe } from "@/lib/auth";
+import type { Me } from "@/lib/auth";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const me = await requireMe();
-
+/** Replaces app/(app)/layout.tsx's shared chrome: sidebar + header + sign-out. */
+export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   return (
     <div className="flex flex-1">
       <Sidebar />
@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Signed in as {me.username}
             {me.role ? ` (${me.role})` : ""}
           </p>
-          <form action={logout}>
+          <form method="POST" action="/api/auth/logout">
             <button
               type="submit"
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"

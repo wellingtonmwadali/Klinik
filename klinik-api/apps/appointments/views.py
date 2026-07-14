@@ -50,7 +50,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You cannot book an appointment on behalf of another patient.")
             return own_patient
 
-        if role_name in (Role.ADMIN, Role.RECEPTIONIST):
+        if role_name in (Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR):
             if validated_patient is None:
                 raise PermissionDenied("A 'patient' must be specified when booking on behalf of someone.")
             return validated_patient
@@ -63,6 +63,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         data = serializer.validated_data
 
         patient = self._resolve_patient(request, data.get("patient"))
+
+        role_name = request.user.role.name if request.user.role else None
+        if role_name == Role.DOCTOR:
+            own_doctor = getattr(request.user, "doctor_profile", None)
+            if own_doctor is None or own_doctor.pk != data["doctor"].pk:
+                raise PermissionDenied("You can only book appointments on your own calendar.")
 
         try:
             appointment, created = AppointmentBookingService.book_appointment(

@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Doctor, DoctorWorkSchedule
@@ -65,6 +68,34 @@ class WeeklyScheduleWriteSerializer(serializers.Serializer):
     effective_from = serializers.DateField()
     effective_until = serializers.DateField(required=False, allow_null=True, default=None)
     days = WorkScheduleDayInputSerializer(many=True)
+
+    def validate_effective_from(self, value):
+        today = timezone.now().date()
+        if value < today:
+            raise serializers.ValidationError("Effective from cannot be in the past.")
+        return value
+
+    def validate(self, data):
+        effective_from = data.get("effective_from")
+        effective_until = data.get("effective_until")
+
+        if effective_until is not None and effective_until < effective_from:
+            raise serializers.ValidationError(
+                {"effective_until": "Effective until must be on or after effective from."}
+            )
+
+        if effective_until is not None:
+            minimum_until = effective_from + timedelta(weeks=3)
+            if effective_until < minimum_until:
+                raise serializers.ValidationError(
+                    {
+                        "effective_until": (
+                            "Effective until must be at least 3 weeks after the effective from date."
+                        )
+                    }
+                )
+
+        return data
 
     def validate_days(self, value):
         if len(value) != DoctorWorkSchedule.WORKING_DAYS_PER_WEEK:
