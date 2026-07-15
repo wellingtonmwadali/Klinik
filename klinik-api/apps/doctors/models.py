@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
@@ -20,6 +21,11 @@ class Doctor(models.Model):
         (STATUS_INACTIVE, "Inactive"),
     ]
 
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -73,6 +79,11 @@ class Doctor(models.Model):
 
 class DoctorWorkSchedule(models.Model):
     """Doctor's weekly work schedule with support for schedule changes"""
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     MONDAY = 0
     TUESDAY = 1

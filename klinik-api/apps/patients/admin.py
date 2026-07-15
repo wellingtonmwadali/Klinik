@@ -5,71 +5,71 @@ from .models import Patient
 
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = [
+    list_display = (
         "id",
-        "last_name",
-        "first_name",
-        "date_of_birth",
-        "gender",
-        "blood_group",
+        "full_name",
+        "email",
+        "phone",
         "status",
         "is_active",
-    ]
-    list_filter = ["gender", "blood_group", "status", "is_active", "created_at"]
-    search_fields = ["first_name", "last_name", "email", "phone", "insurance_policy_number"]
-    readonly_fields = ["created_at", "updated_at", "age"]
-    date_hierarchy = "date_of_birth"
+        "created_at",
+    )
+
+    search_fields = (
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+    )
+
+    list_filter = (
+        "status",
+        "is_active",
+        "created_at",
+    )
+
+    readonly_fields = (
+        "id",
+        "created_at",
+        "updated_at",
+    )
+
+    ordering = (
+        "last_name",
+        "first_name",
+    )
 
     fieldsets = (
         (
-            "Basic Information",
+            "Patient Information",
             {
                 "fields": (
+                    "id",
                     "user",
                     "first_name",
                     "last_name",
-                    "date_of_birth",
-                    "age",
-                    "gender",
                     "email",
                     "phone",
-                    "address",
                 )
             },
         ),
         (
-            "Medical Information",
+            "Account Status",
             {
                 "fields": (
-                    "blood_group",
-                    "medical_history",
-                    "allergies",
-                    "current_medications",
-                    "medical_notes",
+                    "status",
+                    "is_active",
                 )
             },
         ),
         (
-            "Emergency Contact",
+            "Audit Information",
             {
                 "fields": (
-                    "emergency_contact_name",
-                    "emergency_contact_phone",
-                    "emergency_contact_relationship",
-                )
-            },
-        ),
-        (
-            "Insurance",
-            {
-                "fields": (
-                    "insurance_provider",
-                    "insurance_policy_number",
-                    "insurance_expiry_date",
+                    "created_at",
+                    "updated_at",
                 ),
                 "classes": ("collapse",),
             },
         ),
-        ("Status", {"fields": ("status", "is_active")}),
-        ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )

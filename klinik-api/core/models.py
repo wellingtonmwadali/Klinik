@@ -1,3 +1,4 @@
+import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -5,22 +6,23 @@ from django.utils.translation import gettext_lazy as _
 
 class Role(models.Model):
     """User roles for RBAC"""
-
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     PATIENT = "PATIENT"
     DOCTOR = "DOCTOR"
     ADMIN = "ADMIN"
-    RECEPTIONIST = "RECEPTIONIST"
+  
 
     ROLE_CHOICES = [
         (PATIENT, "Patient"),
         (DOCTOR, "Doctor"),
         (ADMIN, "Admin"),
-        (RECEPTIONIST, "Receptionist"),
+    
     ]
 
     name = models.CharField(max_length=50, choices=ROLE_CHOICES, unique=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
 
     class Meta:
         db_table = "roles"
@@ -32,7 +34,13 @@ class Role(models.Model):
 
 class User(AbstractUser):
     """Extended user model with timezone and role support"""
-
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    
     role = models.ForeignKey(
         Role, on_delete=models.PROTECT, related_name="users", null=True, blank=True
     )

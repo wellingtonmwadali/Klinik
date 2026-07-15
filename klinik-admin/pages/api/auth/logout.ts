@@ -14,5 +14,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   appendSetCookie(res, "sessionid=; Path=/; Max-Age=0");
   appendSetCookie(res, "csrftoken=; Path=/; Max-Age=0");
 
-  res.redirect(303, "/login");
+  res.redirect(303, "/");
 }

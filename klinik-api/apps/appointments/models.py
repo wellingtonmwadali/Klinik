@@ -1,3 +1,4 @@
+import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -7,6 +8,12 @@ from django.utils.translation import gettext_lazy as _
 
 class Appointment(models.Model):
     """Comprehensive appointment model with idempotency and rescheduling support"""
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     STATUS_SCHEDULED = "SCHEDULED"
     STATUS_CONFIRMED = "CONFIRMED"
@@ -173,6 +180,12 @@ class Appointment(models.Model):
 
 class AppointmentHistory(models.Model):
     """Audit trail for all appointment changes"""
+   
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     ACTION_CREATED = "CREATED"
     ACTION_CONFIRMED = "CONFIRMED"
@@ -225,6 +238,12 @@ class AppointmentHistory(models.Model):
 
 class AppointmentSlot(models.Model):
     """Pre-generated time slots for faster availability queries"""
+  
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     doctor = models.ForeignKey(
         "doctors.Doctor", on_delete=models.CASCADE, related_name="time_slots"
@@ -261,6 +280,11 @@ class AppointmentSlot(models.Model):
 
 class RescheduleRequest(models.Model):
     """Handle atomic rescheduling of appointments"""
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
     STATUS_PENDING = "PENDING"
     STATUS_APPROVED = "APPROVED"

@@ -21,10 +21,9 @@ class Command(BaseCommand):
         self.stdout.write("Creating roles...")
         roles = {}
         for role_name, description in [
-            (Role.PATIENT, "Patient - can book and manage appointments"),
-            (Role.DOCTOR, "Doctor - can manage their schedule and appointments"),
-            (Role.ADMIN, "Admin - full system access"),
-            (Role.RECEPTIONIST, "Receptionist - can manage appointments on behalf of patients"),
+    (Role.ADMIN, "System administrator"),
+    (Role.DOCTOR, "Medical practitioner"),
+    (Role.PATIENT, "Clinic patient"),
         ]:
             role, created = Role.objects.get_or_create(
                 name=role_name, defaults={"description": description}
@@ -48,7 +47,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            admin_user.set_password("admin123")
+            admin_user.set_password("admin@123")
             admin_user.save()
             self.stdout.write(
                 self.style.SUCCESS("  ✓ Created admin user (username: admin, password: admin123)")
@@ -180,8 +179,8 @@ class Command(BaseCommand):
                 },
             )
             if user_created:
-                doctor_user.set_password("doctor123")
-                doctor_user.save()
+              doctor_user.set_password("doctor@123")
+            doctor_user.save()
 
             # Create doctor profile
             doctor, doctor_created = Doctor.objects.get_or_create(
@@ -356,8 +355,8 @@ class Command(BaseCommand):
                 },
             )
             if user_created:
-                patient_user.set_password("patient123")
-                patient_user.save()
+               patient_user.set_password("patient@123")
+            patient_user.save()
 
             # Create patient profile
             patient, patient_created = Patient.objects.get_or_create(
@@ -407,7 +406,7 @@ class Command(BaseCommand):
         self.stdout.write("=" * 60)
 
         self.stdout.write("\n📋 SUMMARY:")
-        self.stdout.write("  • Roles: 4 (Admin, Doctor, Patient, Receptionist)")
+        self.stdout.write("  • Roles: 4 (Admin, Doctor, Patient")
         self.stdout.write("  • Doctors: 5 specialists")
         self.stdout.write("  • Patients: 5 with complete medical records")
         self.stdout.write("  • Admin Users: 1")

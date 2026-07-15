@@ -22,6 +22,8 @@ export default function LoginPage() {
     });
     const body = await response.json().catch(() => null);
 
+    console.log("fhddfjkdkdf", response)
+
     if (!response.ok) {
       setError(body?.error ?? "Login failed. Please try again.");
       setPending(false);
