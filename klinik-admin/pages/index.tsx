@@ -372,7 +372,7 @@ export default function Home() {
                     <Field
                       id="username"
                       name="username"
-                      label="Username"
+                      label="Email"
                       autoComplete="username"
                     />
                     <Field
