@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { InferGetServerSidePropsType } from "next";
-
+import type { JSX } from "react";
 import { AppShell } from "@/components/app-shell";
 import { withAuthGuard } from "@/lib/with-auth-guard";
 
