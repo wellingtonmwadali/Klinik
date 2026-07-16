@@ -70,3 +70,20 @@ class AppointmentBookingSerializer(serializers.Serializer):
     start_datetime = TimezoneAwareDateTimeField()
     reason_for_visit = serializers.CharField(required=False, allow_blank=True, default="")
     idempotency_key = serializers.CharField(required=False, allow_blank=False, max_length=255)
+
+
+class AppointmentCancelSerializer(serializers.Serializer):
+    """Serializer for the POST /appointments/{id}/cancel/ request body."""
+
+    reason = serializers.CharField(allow_blank=False, max_length=500)
+
+
+class AppointmentRescheduleSerializer(serializers.Serializer):
+    """Serializer for the POST /appointments/{id}/reschedule/ request body.
+
+    Same rationale as AppointmentBookingSerializer: end_datetime is always
+    derived server-side from the matched slot, never trusted from the client.
+    """
+
+    doctor = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all())
+    start_datetime = TimezoneAwareDateTimeField()

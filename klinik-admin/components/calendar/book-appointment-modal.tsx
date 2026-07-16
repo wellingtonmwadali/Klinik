@@ -32,6 +32,7 @@ export function BookAppointmentModal({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [booked, setBooked] = useState<{ patientName: string } | null>(null);
 
   useEffect(() => {
     if (selectedPatient || query.trim().length < 2) {
@@ -93,7 +94,7 @@ export function BookAppointmentModal({
         return;
       }
 
-      onBooked();
+      setBooked({ patientName: selectedPatient.full_name });
     } catch {
       setError("Failed to book the appointment. Please try again.");
     } finally {
@@ -102,6 +103,31 @@ export function BookAppointmentModal({
   }
 
   const date = slot.start_datetime.slice(0, 10);
+
+  if (booked) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            Appointment booked
+          </h2>
+          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+            {booked.patientName}'s visit with Dr. {doctor.full_name} is confirmed for{" "}
+            {dayLabel(date)} at {shortTime(slot.start_time)}.
+          </p>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={onBooked}
+              className="rounded-md bg-zinc-950 px-3 py-1.5 text-sm font-medium text-white dark:bg-zinc-50 dark:text-zinc-950"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

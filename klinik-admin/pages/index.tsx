@@ -142,7 +142,7 @@ export default function Home() {
       setLoginPending(false);
       return;
     }
-
+    
     router.push("/dashboard");
   }
 
