@@ -1,19 +1,25 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 
+import { AffectedAppointmentsPanel } from "@/components/doctors/affected-appointments-panel";
+import type { Appointment, Doctor as AppointmentDoctor } from "@/components/appointments/appointments-table";
+
 type Doctor = {
-  id: number;
+  id: string;
   full_name: string;
   specialization: string;
 };
 
-type WeeklyDaySchedule = {
-  weekday: number;
+type DayTimes = {
   start_time: string;
   end_time: string;
   break_start_time: string;
   break_end_time: string;
+};
+
+type WeeklyDaySchedule = DayTimes & {
+  weekday: number;
 };
 
 type ScheduleRow = WeeklyDaySchedule & {
@@ -23,9 +29,10 @@ type ScheduleRow = WeeklyDaySchedule & {
 
 type ScheduleFormProps = {
   doctor: Doctor;
+  doctors: AppointmentDoctor[];
 };
 
-const DEFAULT_TIMES = {
+const DEFAULT_TIMES: DayTimes = {
   start_time: "09:00",
   end_time: "18:00",
   break_start_time: "12:00",
@@ -38,7 +45,11 @@ const WEEKDAYS: { id: number; label: string }[] = [
   { id: 2, label: "Wednesday" },
   { id: 3, label: "Thursday" },
   { id: 4, label: "Friday" },
+  { id: 5, label: "Saturday" },
+  { id: 6, label: "Sunday" },
 ];
+
+const DEFAULT_ENABLED_WEEKDAYS = [0, 1, 2, 3, 4];
 
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -50,18 +61,16 @@ function addDays(dateStr: string, days: number) {
   return isoDate(date);
 }
 
-export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
-  const doctorId = Number(doctor.id);
-  const hasValidDoctorId = !Number.isNaN(doctorId);
+export function DoctorScheduleForm({ doctor, doctors }: ScheduleFormProps) {
+  const doctorId = doctor.id;
+  const hasValidDoctorId = typeof doctorId === "string" && doctorId.length > 0;
 
   const today = useMemo(() => isoDate(new Date()), []);
   const [effectiveFrom, setEffectiveFrom] = useState<string>(today);
   const [effectiveUntil, setEffectiveUntil] = useState<string>(addDays(today, 21));
-  const [days, setDays] = useState<WeeklyDaySchedule[]>(
-    WEEKDAYS.map((weekday) => ({
-      weekday: weekday.id,
-      ...DEFAULT_TIMES,
-    }))
+  const [enabledWeekdays, setEnabledWeekdays] = useState<number[]>(DEFAULT_ENABLED_WEEKDAYS);
+  const [dayTimes, setDayTimes] = useState<Record<number, DayTimes>>(() =>
+    Object.fromEntries(WEEKDAYS.map((weekday) => [weekday.id, DEFAULT_TIMES]))
   );
   const [existingSchedule, setExistingSchedule] = useState<ScheduleRow[]>([]);
   const [scheduleMode, setScheduleMode] = useState<"view" | "create">("view");
@@ -69,6 +78,7 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [affectedAppointments, setAffectedAppointments] = useState<Appointment[]>([]);
 
   const minUntil = useMemo(() => addDays(effectiveFrom, 21), [effectiveFrom]);
 
@@ -113,22 +123,31 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
 
         const schedule = text ? JSON.parse(text) : [];
         if (Array.isArray(schedule) && schedule.length > 0) {
-          const normalizedDays = WEEKDAYS.map((weekday) => {
-            const match = schedule.find(
-              (item: { [key: string]: unknown }) => item.weekday === weekday.id
-            );
-            return {
-              weekday: weekday.id,
-              start_time: match?.start_time?.slice(0, 5) || DEFAULT_TIMES.start_time,
-              end_time: match?.end_time?.slice(0, 5) || DEFAULT_TIMES.end_time,
-              break_start_time:
-                match?.break_start_time?.slice(0, 5) || DEFAULT_TIMES.break_start_time,
-              break_end_time:
-                match?.break_end_time?.slice(0, 5) || DEFAULT_TIMES.break_end_time,
-            };
+          const scheduledWeekdays: number[] = schedule.map(
+            (item: { weekday: number }) => item.weekday
+          );
+
+          setDayTimes((prev) => {
+            const next = { ...prev };
+            for (const weekday of WEEKDAYS) {
+              const match = schedule.find(
+                (item: { [key: string]: unknown }) => item.weekday === weekday.id
+              );
+              if (match) {
+                next[weekday.id] = {
+                  start_time: match.start_time?.slice(0, 5) || DEFAULT_TIMES.start_time,
+                  end_time: match.end_time?.slice(0, 5) || DEFAULT_TIMES.end_time,
+                  break_start_time:
+                    match.break_start_time?.slice(0, 5) || DEFAULT_TIMES.break_start_time,
+                  break_end_time:
+                    match.break_end_time?.slice(0, 5) || DEFAULT_TIMES.break_end_time,
+                };
+              }
+            }
+            return next;
           });
 
-          setDays(normalizedDays);
+          setEnabledWeekdays([...new Set(scheduledWeekdays)].sort((a, b) => a - b));
           setExistingSchedule(schedule);
           setEffectiveFrom(schedule[0].effective_from || today);
           setEffectiveUntil(
@@ -150,16 +169,19 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
     fetchSchedule();
   }, [doctorId, hasValidDoctorId, today]);
 
-  const handleTimeChange = (
-    weekday: number,
-    field: keyof Omit<WeeklyDaySchedule, "weekday">,
-    value: string
-  ) => {
-    setDays((prev) =>
-      prev.map((day) =>
-        day.weekday === weekday ? { ...day, [field]: value } : day
-      )
+  const toggleWeekday = (weekday: number) => {
+    setEnabledWeekdays((prev) =>
+      prev.includes(weekday)
+        ? prev.filter((id) => id !== weekday)
+        : [...prev, weekday].sort((a, b) => a - b)
     );
+  };
+
+  const handleTimeChange = (weekday: number, field: keyof DayTimes, value: string) => {
+    setDayTimes((prev) => ({
+      ...prev,
+      [weekday]: { ...prev[weekday], [field]: value },
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,6 +189,13 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
     setSaving(true);
     setError(null);
     setSuccess(false);
+    setAffectedAppointments([]);
+
+    if (enabledWeekdays.length === 0) {
+      setError("Select at least one working day.");
+      setSaving(false);
+      return;
+    }
 
     if (new Date(`${effectiveFrom}T00:00:00Z`) < new Date(`${today}T00:00:00Z`)) {
       setError("Effective date cannot be in the past.");
@@ -187,6 +216,11 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
     }
 
     try {
+      const days: WeeklyDaySchedule[] = enabledWeekdays.map((weekday) => ({
+        weekday,
+        ...dayTimes[weekday],
+      }));
+
       const payload = {
         effective_from: effectiveFrom,
         effective_until: effectiveUntil,
@@ -214,11 +248,15 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
         );
       }
 
-      const savedSchedule = text ? JSON.parse(text) : [];
-      if (Array.isArray(savedSchedule) && savedSchedule.length > 0) {
+      const parsed = text ? JSON.parse(text) : null;
+      const savedSchedule: ScheduleRow[] = parsed?.schedule ?? [];
+      const affected: Appointment[] = parsed?.affected_appointments ?? [];
+
+      if (savedSchedule.length > 0) {
         setExistingSchedule(savedSchedule);
         setScheduleMode("view");
       }
+      setAffectedAppointments(affected);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -323,7 +361,7 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                         {row
                           ? `${row.start_time.slice(0, 5)} – ${row.end_time.slice(0, 5)}, break ${row.break_start_time.slice(0, 5)} – ${row.break_end_time.slice(0, 5)}`
-                          : "No schedule set for this day."}
+                          : "Not a working day."}
                       </p>
                     </div>
                   );
@@ -347,7 +385,7 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
                   Create work schedule for Dr. {doctor.full_name}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Select the schedule window using the calendar and ensure it spans at least 3 weeks.
+                  Pick any combination of days (Monday–Sunday) and ensure the effective window spans at least 3 weeks.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -387,72 +425,88 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
             </div>
 
             <div className="mt-6 space-y-4">
-              {days.map((day) => (
-                <div
-                  key={day.weekday}
-                  className="grid gap-3 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900 sm:grid-cols-5"
-                >
-                  <div className="sm:col-span-1">
-                    <p className="font-medium text-zinc-950 dark:text-zinc-50">
-                      {WEEKDAYS[day.weekday].label}
-                    </p>
+              {WEEKDAYS.map((weekday) => {
+                const enabled = enabledWeekdays.includes(weekday.id);
+                const times = dayTimes[weekday.id];
+                return (
+                  <div
+                    key={weekday.id}
+                    className="grid gap-3 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900 sm:grid-cols-5"
+                  >
+                    <div className="sm:col-span-1">
+                      <label className="flex items-center gap-2 font-medium text-zinc-950 dark:text-zinc-50">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={() => toggleWeekday(weekday.id)}
+                          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                        />
+                        {weekday.label}
+                      </label>
+                    </div>
+                    <div className="sm:col-span-4 grid gap-3 sm:grid-cols-4">
+                      {enabled ? (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              Start time
+                            </label>
+                            <input
+                              type="time"
+                              value={times.start_time}
+                              onChange={(e) =>
+                                handleTimeChange(weekday.id, "start_time", e.target.value)
+                              }
+                              className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              End time
+                            </label>
+                            <input
+                              type="time"
+                              value={times.end_time}
+                              onChange={(e) =>
+                                handleTimeChange(weekday.id, "end_time", e.target.value)
+                              }
+                              className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              Break start
+                            </label>
+                            <input
+                              type="time"
+                              value={times.break_start_time}
+                              onChange={(e) =>
+                                handleTimeChange(weekday.id, "break_start_time", e.target.value)
+                              }
+                              className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              Break end
+                            </label>
+                            <input
+                              type="time"
+                              value={times.break_end_time}
+                              onChange={(e) =>
+                                handleTimeChange(weekday.id, "break_end_time", e.target.value)
+                              }
+                              className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="sm:col-span-4 text-sm text-zinc-400">Not a working day.</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="sm:col-span-4 grid gap-3 sm:grid-cols-4">
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        Start time
-                      </label>
-                      <input
-                        type="time"
-                        value={day.start_time}
-                        onChange={(e) =>
-                          handleTimeChange(day.weekday, "start_time", e.target.value)
-                        }
-                        className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        End time
-                      </label>
-                      <input
-                        type="time"
-                        value={day.end_time}
-                        onChange={(e) =>
-                          handleTimeChange(day.weekday, "end_time", e.target.value)
-                        }
-                        className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        Break start
-                      </label>
-                      <input
-                        type="time"
-                        value={day.break_start_time}
-                        onChange={(e) =>
-                          handleTimeChange(day.weekday, "break_start_time", e.target.value)
-                        }
-                        className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        Break end
-                      </label>
-                      <input
-                        type="time"
-                        value={day.break_end_time}
-                        onChange={(e) =>
-                          handleTimeChange(day.weekday, "break_end_time", e.target.value)
-                        }
-                        className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -478,6 +532,14 @@ export function DoctorScheduleForm({ doctor }: ScheduleFormProps) {
             {saving ? "Saving..." : "Save Schedule"}
           </button>
         </form>
+      )}
+
+      {affectedAppointments.length > 0 && (
+        <AffectedAppointmentsPanel
+          appointments={affectedAppointments}
+          doctors={doctors}
+          title={`${affectedAppointments.length} appointment${affectedAppointments.length === 1 ? "" : "s"} no longer fit this schedule`}
+        />
       )}
     </div>
   );

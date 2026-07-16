@@ -9,15 +9,19 @@ from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from apps.appointments.serializers import AppointmentSerializer
+
 from core.models import Role
-from .models import Doctor, DoctorWorkSchedule
+from .models import Doctor, DoctorUnavailability, DoctorWorkSchedule
 from .serializers import (
     DoctorSerializer,
     AvailabilityResponseSerializer,
+    DoctorUnavailabilitySerializer,
+    DoctorUnavailabilityWriteSerializer,
     DoctorWorkScheduleSerializer,
     WeeklyScheduleWriteSerializer,
 )
-from .services import AvailabilityService, WorkScheduleService
+from .services import AvailabilityService, DoctorUnavailabilityService, WorkScheduleService
 
 
 class DoctorViewSet(viewsets.ModelViewSet):
@@ -43,6 +47,8 @@ class DoctorViewSet(viewsets.ModelViewSet):
             permission_classes = [AllowAny]
         elif self.action == 'work_schedule' and self.request.method == 'PUT':
             permission_classes = [IsAuthenticated]
+        elif self.action == 'unavailability':
+            permission_classes = [AllowAny] if self.request.method == 'GET' else [IsAuthenticated]
         else:
             permission_classes = [IsAdminUser]
         return [permission() for permission in permission_classes]
@@ -108,9 +114,76 @@ class DoctorViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        affected_appointments = WorkScheduleService.find_conflicting_appointments(
+            doctor=doctor,
+            effective_from=serializer.validated_data['effective_from'],
+        )
+
         return Response(
-            DoctorWorkScheduleSerializer(instances, many=True).data,
+            {
+                'schedule': DoctorWorkScheduleSerializer(instances, many=True).data,
+                'affected_appointments': AppointmentSerializer(
+                    affected_appointments, many=True
+                ).data,
+            },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['get', 'post'], url_path='unavailability')
+    def unavailability(self, request, pk=None):
+        """
+        List or create a doctor's blocked-out periods (e.g. a day off).
+
+        GET: returns current/future unavailability periods for the doctor.
+        POST: blocks out a period. Body:
+            {
+                "start_datetime": "2026-07-20T00:00:00Z",
+                "end_datetime": "2026-07-21T00:00:00Z",
+                "reason": "VACATION",
+                "notes": ""
+            }
+        Returns the created period plus any active appointments it affects,
+        so the caller can prompt rescheduling for them.
+        """
+        doctor = get_object_or_404(Doctor, pk=pk)
+
+        if request.method == 'GET':
+            now = timezone.now()
+            periods = DoctorUnavailability.objects.filter(
+                doctor=doctor,
+                end_datetime__gte=now,
+            )
+            serializer = DoctorUnavailabilitySerializer(periods, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # POST
+        role_name = request.user.role.name if getattr(request.user, 'role', None) else None
+        if not request.user.is_staff and role_name != Role.ADMIN:
+            if not hasattr(request.user, 'doctor_profile') or request.user.doctor_profile.id != doctor.id:
+                return Response(
+                    {
+                        'detail': 'You do not have permission to block out this doctor\'s time.',
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = DoctorUnavailabilityWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        unavailability, affected_appointments = DoctorUnavailabilityService.create_unavailability(
+            doctor=doctor,
+            created_by=request.user,
+            **serializer.validated_data,
+        )
+
+        return Response(
+            {
+                'unavailability': DoctorUnavailabilitySerializer(unavailability).data,
+                'affected_appointments': AppointmentSerializer(
+                    affected_appointments, many=True
+                ).data,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=['get'], url_path='availability')

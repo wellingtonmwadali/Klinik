@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Doctor, DoctorWorkSchedule
+from .models import Doctor, DoctorUnavailability, DoctorWorkSchedule
 
 
 class DoctorSerializer(serializers.ModelSerializer):
@@ -98,12 +98,47 @@ class WeeklyScheduleWriteSerializer(serializers.Serializer):
         return data
 
     def validate_days(self, value):
-        if len(value) != DoctorWorkSchedule.WORKING_DAYS_PER_WEEK:
+        if not (1 <= len(value) <= 7):
             raise serializers.ValidationError(
-                f"Exactly {DoctorWorkSchedule.WORKING_DAYS_PER_WEEK} working days are required; "
-                f"got {len(value)}."
+                f"Between 1 and 7 working days are required; got {len(value)}."
             )
+        weekdays = [day["weekday"] for day in value]
+        if len(set(weekdays)) != len(weekdays):
+            raise serializers.ValidationError("Duplicate weekdays are not allowed.")
         return value
+
+
+class DoctorUnavailabilitySerializer(serializers.ModelSerializer):
+    """Serializer for reading a doctor's unavailability periods."""
+
+    class Meta:
+        model = DoctorUnavailability
+        fields = [
+            "id",
+            "start_datetime",
+            "end_datetime",
+            "reason",
+            "notes",
+            "affects_existing_appointments",
+            "created_at",
+        ]
+        read_only_fields = ["id", "affects_existing_appointments", "created_at"]
+
+
+class DoctorUnavailabilityWriteSerializer(serializers.Serializer):
+    """Serializer for blocking out a period (e.g. a full day off) for a doctor."""
+
+    start_datetime = serializers.DateTimeField()
+    end_datetime = serializers.DateTimeField()
+    reason = serializers.ChoiceField(choices=DoctorUnavailability.REASON_CHOICES)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, data):
+        if data["end_datetime"] <= data["start_datetime"]:
+            raise serializers.ValidationError(
+                {"end_datetime": "End datetime must be after start datetime."}
+            )
+        return data
 
 
 class TimeSlotSerializer(serializers.Serializer):

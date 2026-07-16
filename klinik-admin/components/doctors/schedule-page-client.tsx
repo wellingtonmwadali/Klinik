@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { DoctorScheduleForm } from "@/components/doctors/schedule-form";
+import { DayOffPanel } from "@/components/doctors/day-off-panel";
 
 type Doctor = {
-  id: number;
+  id: string;
   full_name: string;
   specialization: string;
   email: string;
@@ -18,7 +19,7 @@ type User = {
   role?: string | null;
   is_staff: boolean;
   doctor_profile?: {
-    id: number | string;
+    id: string;
   };
 };
 
@@ -33,35 +34,26 @@ export function SchedulePageClient({
   currentUser,
   error: initialError,
 }: SchedulePageClientProps) {
-  const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(initialError);
+  const [section, setSection] = useState<"schedule" | "day-off">("schedule");
 
   const isDoctor = !!currentUser?.doctor_profile;
   const isAdmin = currentUser?.role === "ADMIN" && !isDoctor;
 
   const validDoctors = doctors.filter(
-    (doctor) => typeof doctor.id === "number" && !Number.isNaN(doctor.id)
+    (doctor) => typeof doctor.id === "string" && doctor.id.length > 0
   );
   const selectedDoctor = selectedDoctorId
     ? validDoctors.find((doctor) => doctor.id === selectedDoctorId) ?? null
     : null;
 
   useEffect(() => {
-    console.log("=== Schedule Page Debug ===");
-    console.log("Current User:", currentUser);
-    console.log("Role:", currentUser?.role);
-    console.log("Is Admin:", isAdmin);
-    console.log("Is Doctor:", isDoctor);
-    console.log("Doctor Profile ID:", currentUser?.doctor_profile?.id);
-    console.log("Doctors List:", doctors);
-
-    if (!isAdmin && isDoctor && currentUser?.doctor_profile?.id != null) {
-      const doctorProfileId = Number(currentUser.doctor_profile.id);
-      if (!Number.isNaN(doctorProfileId)) {
-        const currentDoctor = validDoctors.find((d) => d.id === doctorProfileId);
-        if (currentDoctor) {
-          setSelectedDoctorId(currentDoctor.id);
-        }
+    if (!isAdmin && isDoctor && currentUser?.doctor_profile?.id) {
+      const doctorProfileId = currentUser.doctor_profile.id;
+      const currentDoctor = validDoctors.find((d) => d.id === doctorProfileId);
+      if (currentDoctor) {
+        setSelectedDoctorId(currentDoctor.id);
       }
     }
   }, [doctors, currentUser, isAdmin, isDoctor]);
@@ -94,8 +86,7 @@ export function SchedulePageClient({
             id="doctor-select"
             value={selectedDoctor?.id ?? ""}
             onChange={(e) => {
-              const doctorId = Number(e.target.value);
-              setSelectedDoctorId(Number.isNaN(doctorId) ? null : doctorId);
+              setSelectedDoctorId(e.target.value || null);
             }}
             className="mt-2 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           >
@@ -122,10 +113,41 @@ export function SchedulePageClient({
         )
       )}
 
-      {/* Schedule Form */}
+      {/* Schedule / Day Off */}
       {selectedDoctor ? (
         canEditDoctor(selectedDoctor) ? (
-          <DoctorScheduleForm doctor={selectedDoctor} />
+          <div className="space-y-6">
+            <div className="flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700" style={{ width: "fit-content" }}>
+              <button
+                type="button"
+                onClick={() => setSection("schedule")}
+                className={`px-3 py-1.5 text-sm font-medium ${
+                  section === "schedule"
+                    ? "bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950"
+                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                }`}
+              >
+                Work Schedule
+              </button>
+              <button
+                type="button"
+                onClick={() => setSection("day-off")}
+                className={`px-3 py-1.5 text-sm font-medium ${
+                  section === "day-off"
+                    ? "bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950"
+                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                }`}
+              >
+                Day Off
+              </button>
+            </div>
+
+            {section === "schedule" ? (
+              <DoctorScheduleForm doctor={selectedDoctor} doctors={validDoctors} />
+            ) : (
+              <DayOffPanel doctorId={selectedDoctor.id} doctors={validDoctors} />
+            )}
+          </div>
         ) : (
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950">
             <p className="text-sm text-yellow-700 dark:text-yellow-200">

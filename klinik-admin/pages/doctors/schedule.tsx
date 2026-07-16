@@ -7,7 +7,7 @@ import { djangoJson } from "@/lib/django";
 import { withAuthGuard } from "@/lib/with-auth-guard";
 
 type Doctor = {
-  id: number;
+  id: string;
   full_name: string;
   specialization: string;
   email: string;
@@ -20,9 +20,10 @@ type User = {
   id: number;
   username: string;
   email: string;
+  role?: string | null;
   is_staff: boolean;
   doctor_profile?: {
-    id: number;
+    id: string;
   };
 };
 
@@ -45,7 +46,7 @@ export const getServerSideProps = withAuthGuard(async (ctx) => {
     doctors = Array.isArray(doctorsResponse) ? doctorsResponse : doctorsResponse.results;
 
     // Deduplicate and sort doctors by name to present a stable list in the UI
-    const unique: Record<number, Doctor> = {};
+    const unique: Record<string, Doctor> = {};
     for (const d of doctors) unique[d.id] = d;
     doctors = Object.values(unique).sort((a, b) => a.full_name.localeCompare(b.full_name));
   } catch (err) {

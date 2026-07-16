@@ -26,7 +26,7 @@ type SidebarProps = {
     email: string;
     first_name: string;
     last_name: string;
-    role: "ADMIN" | "DOCTOR" | "PATIENT";
+    role: "ADMIN" | "DOCTOR" | "PATIENT" | null;
     is_staff: boolean;
     doctor_profile: unknown;
   };
@@ -35,9 +35,8 @@ type SidebarProps = {
 export function Sidebar({ me }: SidebarProps) {
   const { pathname } = useRouter();
 
-  const visibleItems = NAV_ITEMS.filter((item) =>
-    item.roles.includes(me.role)
-  );
+  const role = me.role;
+  const visibleItems = NAV_ITEMS.filter((item) => (role ? item.roles.includes(role) : false));
 
   return (
     <nav className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-6 dark:border-zinc-800 dark:bg-zinc-950">

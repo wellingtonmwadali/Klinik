@@ -33,13 +33,13 @@ export function WeekView({
               .filter((entry) => entry.row !== null);
 
             return (
-              <div
+              <Link
                 key={day}
-                className="border-r border-zinc-200 last:border-r-0 dark:border-zinc-800"
+                href={`/patients/calendar?view=day&date=${day}${dayLinkParams}`}
+                className="flex flex-col border-r border-zinc-200 last:border-r-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
               >
-                <Link
-                  href={`/patients/calendar?view=day&date=${day}${dayLinkParams}`}
-                  className={`flex items-baseline gap-1.5 border-b border-zinc-200 px-3 py-2 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 ${
+                <div
+                  className={`flex items-baseline gap-1.5 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800 ${
                     isToday ? "bg-zinc-100 dark:bg-zinc-900" : ""
                   }`}
                 >
@@ -55,8 +55,8 @@ export function WeekView({
                   >
                     {Number(day.slice(8, 10))}
                   </span>
-                </Link>
-                <div className="flex min-h-40 flex-col gap-1 p-1.5">
+                </div>
+                <div className="flex min-h-40 flex-1 flex-col gap-1 p-1.5">
                   {working.map((entry) => (
                     <div
                       key={entry.doctor.id}
@@ -72,7 +72,7 @@ export function WeekView({
                     <p className="px-1 pt-2 text-[11px] text-zinc-400">No doctors scheduled</p>
                   )}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

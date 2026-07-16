@@ -798,14 +798,6 @@ class WorkScheduleService:
     """Service for setting a doctor's weekly work schedule as one atomic unit."""
 
     @staticmethod
-    def _net_hours(day: Dict[str, Any]) -> float:
-        gross = DoctorWorkSchedule._hours_between(day["start_time"], day["end_time"])
-        break_hours = DoctorWorkSchedule._hours_between(
-            day["break_start_time"], day["break_end_time"]
-        )
-        return gross - break_hours
-
-    @staticmethod
     @transaction.atomic
     def set_weekly_schedule(
         doctor: Doctor,
@@ -828,32 +820,32 @@ class WorkScheduleService:
 
         Raises:
             ValidationError: if the submitted days don't satisfy the clinic's
-                scheduling rules (5 distinct weekdays, 40 net hours/week, and
-                each day's own rules enforced via DoctorWorkSchedule.clean()).
+                scheduling rules (1-7 distinct weekdays, each day's own rules
+                enforced via DoctorWorkSchedule.clean()).
         """
-        if len(days) != DoctorWorkSchedule.WORKING_DAYS_PER_WEEK:
+        if not (1 <= len(days) <= 7):
             raise ValidationError(
-                f"Exactly {DoctorWorkSchedule.WORKING_DAYS_PER_WEEK} working days must be "
-                f"provided; got {len(days)}."
+                f"Between 1 and 7 working days must be provided; got {len(days)}."
             )
 
         weekdays = [day["weekday"] for day in days]
         if len(set(weekdays)) != len(weekdays):
             raise ValidationError("Duplicate weekdays are not allowed in a weekly schedule.")
 
-        # Clear out any existing schedule for this effective period first so that
-        # per-instance validation below (in particular the uniqueness check on
-        # doctor+weekday+start_time+effective_from) isn't tripped up by the rows
-        # we're about to replace. If anything below raises, @transaction.atomic
-        # rolls this delete back too.
+        # Clear out any existing schedule rows that could still be in effect from
+        # effective_from onward, not just ones matching this exact effective
+        # period — this endpoint replaces the doctor's schedule going forward, so
+        # a prior version with a different effective_from/effective_until must
+        # not be left dangling alongside the new one (that would leave duplicate/
+        # overlapping weekday coverage for the "currently effective" schedule).
+        # If anything below raises, @transaction.atomic rolls this delete back too.
         DoctorWorkSchedule.objects.filter(
             doctor=doctor,
-            effective_from=effective_from,
-            effective_until=effective_until,
+        ).filter(
+            models.Q(effective_until__isnull=True) | models.Q(effective_until__gte=effective_from)
         ).delete()
 
         instances = []
-        total_net_hours = 0.0
         for day in days:
             instance = DoctorWorkSchedule(
                 doctor=doctor,
@@ -863,14 +855,102 @@ class WorkScheduleService:
             )
             instance.full_clean()
             instances.append(instance)
-            total_net_hours += WorkScheduleService._net_hours(day)
-
-        if total_net_hours != DoctorWorkSchedule.WEEKLY_HOURS:
-            raise ValidationError(
-                f"Total weekly hours must equal {DoctorWorkSchedule.WEEKLY_HOURS}; "
-                f"got {total_net_hours}."
-            )
 
         DoctorWorkSchedule.objects.bulk_create(instances)
 
         return instances
+
+    @staticmethod
+    def find_conflicting_appointments(
+        doctor: Doctor,
+        effective_from: date,
+    ) -> List[Appointment]:
+        """
+        Find the doctor's future active appointments that no longer fit their
+        current work schedule (weekday no longer worked, or time falls outside
+        the day's hours or inside the break). Meant to be called right after
+        set_weekly_schedule so callers can prompt rescheduling for these.
+        """
+        now = timezone.now()
+        appointments = Appointment.objects.filter(
+            doctor=doctor,
+            start_datetime__gte=max(
+                now, timezone.make_aware(datetime.combine(effective_from, time.min), timezone.utc)
+            ),
+            status__in=[
+                Appointment.STATUS_SCHEDULED,
+                Appointment.STATUS_CONFIRMED,
+                Appointment.STATUS_IN_PROGRESS,
+            ],
+        )
+
+        conflicting = []
+        for appointment in appointments:
+            appointment_date = appointment.start_datetime.date()
+            weekday = appointment_date.weekday()
+            schedule = AvailabilityService._get_work_schedule(doctor, appointment_date, weekday)
+
+            if not schedule:
+                conflicting.append(appointment)
+                continue
+
+            start_time = appointment.start_datetime.time()
+            end_time = appointment.end_datetime.time()
+
+            fits_hours = start_time >= schedule.start_time and end_time <= schedule.end_time
+            overlaps_break = (
+                schedule.break_start_time
+                and schedule.break_end_time
+                and start_time < schedule.break_end_time
+                and end_time > schedule.break_start_time
+            )
+
+            if not fits_hours or overlaps_break:
+                conflicting.append(appointment)
+
+        return conflicting
+
+
+class DoctorUnavailabilityService:
+    """Service for blocking out a doctor's time (e.g. a day off)."""
+
+    @staticmethod
+    @transaction.atomic
+    def create_unavailability(
+        *,
+        doctor: Doctor,
+        start_datetime: datetime,
+        end_datetime: datetime,
+        reason: str,
+        notes: str = "",
+        created_by=None,
+    ) -> tuple[DoctorUnavailability, List[Appointment]]:
+        """
+        Block out a period for the doctor and return the created record along
+        with any active appointments that fall within it, so the caller can
+        prompt rescheduling for them.
+        """
+        affected = list(
+            Appointment.objects.filter(
+                doctor=doctor,
+                start_datetime__lt=end_datetime,
+                end_datetime__gt=start_datetime,
+                status__in=[
+                    Appointment.STATUS_SCHEDULED,
+                    Appointment.STATUS_CONFIRMED,
+                    Appointment.STATUS_IN_PROGRESS,
+                ],
+            )
+        )
+
+        unavailability = DoctorUnavailability.objects.create(
+            doctor=doctor,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            reason=reason,
+            notes=notes,
+            affects_existing_appointments=bool(affected),
+            created_by=created_by,
+        )
+
+        return unavailability, affected

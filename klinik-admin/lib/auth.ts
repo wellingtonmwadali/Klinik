@@ -3,13 +3,14 @@ import type { IncomingMessage } from "http";
 import { DjangoApiError, djangoJson } from "@/lib/django";
 
 export type Me = {
-  id: number;
+  id: string;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
-  role: string | null;
+  role: "ADMIN" | "DOCTOR" | "PATIENT" | null;
   is_staff: boolean;
+  doctor_profile: { id: string } | null;
 };
 
 /** Fetches the current user; returns null (does not throw) if unauthenticated. */
